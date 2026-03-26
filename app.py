@@ -2,12 +2,9 @@ import streamlit as st
 import pickle
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # Set page config
 st.set_page_config(
@@ -33,20 +30,6 @@ st.markdown("""
         color: #666;
         margin-bottom: 2rem;
     }
-    .info-box {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-    }
-    .metric-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        text-align: center;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,8 +46,9 @@ def load_data():
     df = pd.read_csv("MagicBricks.csv")
     
     # Clean the data - handle NaN values
-    df = df.dropna(subset=['Bathroom'])  # Remove rows with NaN in Bathroom
-    df = df.fillna(0)  # Fill other NaN values with 0
+    if 'Bathroom' in df.columns:
+        df = df.dropna(subset=['Bathroom'])
+    df = df.fillna(0)
     
     # SAME locality grouping used in notebook
     def grp_local(locality):
@@ -109,7 +93,10 @@ def load_data():
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
     # Drop any remaining NaN values in critical columns
-    df = df.dropna(subset=['Area', 'Price', 'BHK', 'Bathroom'])
+    critical_cols = ['Area', 'Price', 'BHK', 'Bathroom']
+    existing_critical = [col for col in critical_cols if col in df.columns]
+    if existing_critical:
+        df = df.dropna(subset=existing_critical)
     
     return df, locality_encoder, locality_encoder.classes_
 
@@ -121,11 +108,11 @@ except Exception as e:
     st.error(f"Error loading model or data: {str(e)}")
     st.stop()
 
-# Header with animation
+# Header
 st.markdown('<div class="main-header">🏠 House Price Predictor</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">AI-Powered Real Estate Valuation for Delhi NCR</div>', unsafe_allow_html=True)
 
-# Create tabs for different sections
+# Create tabs
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Predictor", "📈 Market Insights", "📍 Location Analysis", "📚 Educational Insights"])
 
 # Tab 1: Predictor
@@ -200,10 +187,9 @@ with tab1:
                                   help="Expected price per square foot",
                                   key="per_sqft")
     
-    # Real-time price estimation
     st.markdown("---")
     
-    # Predict button with better styling
+    # Predict button
     col_btn1, col_btn2, col_btn3 = st.columns([1,2,1])
     with col_btn2:
         predict_button = st.button("🔮 Predict Price", type="primary", use_container_width=True)
@@ -233,7 +219,7 @@ with tab1:
             prediction = model.predict(features)[0]
             price_rupees = prediction * 10000000
             
-            # Display result with animations
+            # Display result
             st.markdown("---")
             st.markdown("### 💰 Estimated Property Value")
             
@@ -241,36 +227,30 @@ with tab1:
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
             
             with col_m1:
-                st.metric("Total Price", f"₹{price_rupees:,.0f}", delta=None)
+                st.metric("Total Price", f"₹{price_rupees:,.0f}")
             with col_m2:
-                st.metric("Price per sq ft", f"₹{price_rupees/area:,.0f}", delta=None)
+                st.metric("Price per sq ft", f"₹{price_rupees/area:,.0f}")
             with col_m3:
-                st.metric("Price in Crores", f"₹{price_rupees/10000000:,.2f} Cr", delta=None)
+                st.metric("Price in Crores", f"₹{price_rupees/10000000:,.2f} Cr")
             with col_m4:
-                st.metric("Price in Lakhs", f"₹{price_rupees/100000:,.2f} L", delta=None)
+                st.metric("Price in Lakhs", f"₹{price_rupees/100000:,.2f} L")
             
-            # Add gauge chart for price comparison
+            # Add gauge chart
             fig = go.Figure(go.Indicator(
-                mode = "gauge+number+delta",
-                value = price_rupees/10000000,
-                title = {'text': "Price (in Crores)"},
-                domain = {'x': [0, 1], 'y': [0, 1]},
-                gauge = {
+                mode="gauge+number",
+                value=price_rupees/10000000,
+                title={'text': "Price (in Crores)"},
+                domain={'x': [0, 1], 'y': [0, 1]},
+                gauge={
                     'axis': {'range': [None, 5]},
                     'bar': {'color': "#667eea"},
                     'steps': [
                         {'range': [0, 1], 'color': "lightgray"},
                         {'range': [1, 2], 'color': "gray"},
                         {'range': [2, 3], 'color': "darkgray"}
-                    ],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.75,
-                        'value': price_rupees/10000000
-                    }
+                    ]
                 }
             ))
-            
             fig.update_layout(height=300)
             st.plotly_chart(fig, use_container_width=True)
             
@@ -283,9 +263,7 @@ with tab1:
 with tab2:
     st.markdown("### 📊 Real Estate Market Insights")
     
-    # Check if dataframe is not empty
     if len(df) > 0:
-        # Create visualizations
         col_v1, col_v2 = st.columns(2)
         
         with col_v1:
@@ -296,8 +274,6 @@ with tab2:
                             labels={'Price': 'Price (Crores)', 'Type': 'Property Type'})
                 fig.update_layout(showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Insufficient data for this visualization")
         
         with col_v2:
             st.markdown("#### Average Price by BHK")
@@ -309,99 +285,34 @@ with tab2:
                             color='Price',
                             color_continuous_scale='Viridis')
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Insufficient data for this visualization")
-        
-        # Price trends
-        st.markdown("#### Price Trends by Furnishing Status")
-        col_v3, col_v4 = st.columns(2)
-        
-        with col_v3:
-            if 'Furnishing' in df.columns and 'Price' in df.columns:
-                avg_price_furnishing = df.groupby('Furnishing')['Price'].mean().reset_index()
-                fig = px.pie(avg_price_furnishing, values='Price', names='Furnishing',
-                            title='Average Price by Furnishing Status',
-                            color_discrete_sequence=px.colors.sequential.RdBu)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Insufficient data for this visualization")
-        
-        with col_v4:
-            # Price vs Area scatter plot with fixed size parameter
-            if 'Area' in df.columns and 'Price' in df.columns and 'BHK' in df.columns and 'Bathroom' in df.columns:
-                # Create a copy and ensure no NaN values in Bathroom
-                plot_df = df[['Area', 'Price', 'BHK', 'Bathroom', 'Locality_Group']].copy()
-                plot_df = plot_df.dropna(subset=['Bathroom'])
-                
-                # Ensure Bathroom values are positive
-                plot_df['Bathroom'] = plot_df['Bathroom'].clip(lower=1)
-                
-                fig = px.scatter(plot_df, x='Area', y='Price', color='BHK',
-                                size='Bathroom', 
-                                size_max=20,  # Set maximum size
-                                hover_data=['Locality_Group'],
-                                title='Price vs Area (Size represents Bathrooms)',
-                                labels={'Price': 'Price (Crores)', 'Area': 'Area (sq ft)'})
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Insufficient data for this visualization")
     else:
-        st.warning("No data available for visualizations")
+        st.info("No data available for visualizations")
 
 # Tab 3: Location Analysis
 with tab3:
     st.markdown("### 📍 Location-wise Price Analysis")
     
-    if len(df) > 0:
-        # Create location analysis
-        col_loc1, col_loc2 = st.columns(2)
+    if len(df) > 0 and 'Locality_Group' in df.columns and 'Price' in df.columns:
+        top_localities = df.groupby('Locality_Group')['Price'].mean().sort_values(ascending=False).head(10)
+        fig = px.bar(x=top_localities.values, y=top_localities.index,
+                    orientation='h', title='Top 10 Localities by Average Price',
+                    labels={'x': 'Average Price (Crores)', 'y': 'Locality'},
+                    color=top_localities.values,
+                    color_continuous_scale='Viridis')
+        fig.update_layout(height=500)
+        st.plotly_chart(fig, use_container_width=True)
         
-        with col_loc1:
-            # Top localities by average price
-            if 'Locality_Group' in df.columns and 'Price' in df.columns:
-                top_localities = df.groupby('Locality_Group')['Price'].mean().sort_values(ascending=False).head(10)
-                fig = px.bar(x=top_localities.values, y=top_localities.index,
-                            orientation='h', title='Top 10 Localities by Average Price',
-                            labels={'x': 'Average Price (Crores)', 'y': 'Locality'},
-                            color=top_localities.values,
-                            color_continuous_scale='Viridis')
-                fig.update_layout(height=500)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Insufficient data for this visualization")
+        # Locality statistics table
+        locality_stats = df.groupby('Locality_Group').agg({
+            'Price': ['mean', 'count', 'std']
+        }).round(2)
+        locality_stats.columns = ['Avg Price (Cr)', 'Number of Properties', 'Price Std Dev']
+        locality_stats = locality_stats.sort_values('Avg Price (Cr)', ascending=False)
         
-        with col_loc2:
-            # Price distribution across localities
-            locality_stats = df.groupby('Locality_Group').agg({
-                'Price': ['mean', 'count', 'std']
-            }).round(2)
-            locality_stats.columns = ['Avg Price (Cr)', 'Number of Properties', 'Price Std Dev']
-            locality_stats = locality_stats.sort_values('Avg Price (Cr)', ascending=False)
-            
-            st.markdown("#### Locality Statistics")
-            st.dataframe(locality_stats.head(10), use_container_width=True)
-        
-        # Heatmap of features by locality
-        st.markdown("#### Feature Correlation by Locality")
-        
-        # Prepare data for heatmap
-        numeric_cols = ['Price', 'Area', 'BHK', 'Bathroom']
-        available_cols = [col for col in numeric_cols if col in df.columns]
-        
-        if available_cols:
-            locality_features = df.groupby('Locality_Group')[available_cols].mean().round(2)
-            
-            fig = px.imshow(locality_features.T, 
-                            text_auto=True, 
-                            aspect="auto",
-                            title="Average Property Features by Locality",
-                            labels=dict(x="Locality", y="Feature", color="Value"))
-            fig.update_layout(height=500)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Insufficient data for heatmap visualization")
+        st.markdown("#### Locality Statistics")
+        st.dataframe(locality_stats.head(10), use_container_width=True)
     else:
-        st.warning("No data available for location analysis")
+        st.info("No data available for location analysis")
 
 # Tab 4: Educational Insights
 with tab4:
@@ -412,7 +323,6 @@ with tab4:
     with col_edu1:
         st.markdown("#### 🎯 Key Factors Affecting Property Prices")
         
-        # Feature importance visualization
         feature_importance = {
             'Area': 25,
             'BHK': 15,
@@ -426,8 +336,7 @@ with tab4:
         
         fig = px.pie(values=list(feature_importance.values()), 
                      names=list(feature_importance.keys()),
-                     title="Factors Influencing Property Prices",
-                     color_discrete_sequence=px.colors.sequential.Plasma)
+                     title="Factors Influencing Property Prices")
         st.plotly_chart(fig, use_container_width=True)
         
         st.markdown("""
@@ -441,7 +350,6 @@ with tab4:
     with col_edu2:
         st.markdown("#### 📈 Market Trends Analysis")
         
-        # Create a mock trend line
         years = ['2020', '2021', '2022', '2023', '2024']
         price_trends = {
             'Apartments': [85, 92, 105, 118, 132],
@@ -456,8 +364,7 @@ with tab4:
         
         fig.update_layout(title="Property Price Trends (Indexed to 2020)",
                          xaxis_title="Year",
-                         yaxis_title="Price Index (2020 = 100)",
-                         hovermode='x unified')
+                         yaxis_title="Price Index (2020 = 100)")
         st.plotly_chart(fig, use_container_width=True)
         
         st.markdown("""
@@ -468,7 +375,7 @@ with tab4:
         - Rental yields in prime locations: 2.5-3.5%
         """)
     
-    # ROI Calculator Section
+    # ROI Calculator
     st.markdown("---")
     st.markdown("#### 💰 Return on Investment (ROI) Calculator")
     
@@ -505,7 +412,6 @@ with tab4:
         future_value = purchase_price * ((1 + expected_appreciation/100) ** years_hold)
         total_rental_income = purchase_price * (rental_yield/100) * years_hold
         total_value = future_value + total_rental_income
-        roi_percentage = ((total_value - purchase_price) / purchase_price) * 100
         annualized_roi = ((total_value / purchase_price) ** (1/years_hold) - 1) * 100
         
         col_result1, col_result2, col_result3, col_result4 = st.columns(4)
@@ -519,63 +425,43 @@ with tab4:
         with col_result4:
             st.metric("Annualized ROI", f"{annualized_roi:.1f}%")
         
-        st.success(f"Your investment would grow by {roi_percentage:.1f}% over {years_hold} years!")
+        st.success(f"Your investment would grow by {((total_value - purchase_price) / purchase_price * 100):.1f}% over {years_hold} years!")
 
-# Sidebar enhancements
+# Sidebar
 with st.sidebar:
     st.markdown("### 🏙️ Market Snapshot")
     
     if len(df) > 0:
-        # Quick stats
         avg_price = df['Price'].mean() if 'Price' in df.columns else 0
         avg_area = df['Area'].mean() if 'Area' in df.columns else 0
-        most_common_bhk = df['BHK'].mode()[0] if 'BHK' in df.columns and len(df['BHK'].mode()) > 0 else 2
         
         st.metric("Average Property Price", f"₹{avg_price:.2f} Cr")
         st.metric("Average Area", f"{avg_area:.0f} sq ft")
-        st.metric("Most Common", f"{most_common_bhk} BHK")
         
         st.markdown("---")
-        
         st.markdown("### 📊 Quick Statistics")
         st.markdown(f"""
         - **Total Properties**: {len(df):,}
         - **Unique Localities**: {len(localities)}
-        - **Price Range**: ₹{df['Price'].min():.1f}Cr - ₹{df['Price'].max():.1f}Cr
-        - **Avg Price/sq ft**: ₹{df['Price'].mean()/df['Area'].mean()*10000000:.0f}
         """)
-    else:
-        st.warning("No data available")
     
     st.markdown("---")
-    
     st.markdown("### 🎯 Pro Tips")
     with st.expander("💡 Investment Tips"):
         st.markdown("""
         - **Location First**: Premium localities offer better appreciation
         - **Timing Matters**: Q4 (Oct-Dec) often has better deals
         - **Check Legal Status**: Verify all documents before purchase
-        - **Negotiate Wisely**: 5-10% negotiation is common
-        """)
-    
-    with st.expander("🏗️ Construction Quality"):
-        st.markdown("""
-        Look for:
-        - RERA registration
-        - Quality of materials
-        - Builder reputation
-        - Completion timeline
         """)
     
     st.markdown("---")
     st.markdown("📅 **Last Updated**: March 2026")
-    st.markdown("💡 *Data based on Delhi NCR market*")
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666;'>
-    <p>🏠 House Price Predictor | Powered by Machine Learning | Data Source: MagicBricks</p>
-    <p><small>Disclaimer: This is an AI-powered estimation tool. Actual market prices may vary. Always consult with real estate professionals.</small></p>
+    <p>🏠 House Price Predictor | Powered by Machine Learning</p>
+    <p><small>Disclaimer: This is an AI-powered estimation tool. Actual market prices may vary.</small></p>
 </div>
 """, unsafe_allow_html=True)
